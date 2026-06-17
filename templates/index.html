@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Study Assistant — Welcome</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body class="landing-body">
+
+  <div class="landing-wrap">
+    <div class="landing-card">
+      <div class="landing-brand">
+        <span class="logo-mark">✦</span>
+        <span class="logo-text">StudyAI</span>
+      </div>
+      <h1 class="landing-title">Your private AI study partner</h1>
+      <p class="landing-sub">Powered by Google's Gemini API on the free tier. No paid subscriptions, just bring your own free API key.</p>
+
+      {% if error %}
+        <div class="alert">{{ error }}</div>
+      {% endif %}
+
+      <div id="existingUsers" class="existing-users hidden">
+        <p class="field-label">Continue as</p>
+        <div id="userList" class="user-list"></div>
+        <div class="divider"><span>or</span></div>
+      </div>
+
+      <form id="newUserForm" class="new-user-form">
+        <label class="field-label" for="nameInput">Start a new profile</label>
+        <input type="text" id="nameInput" placeholder="Enter your name" autocomplete="off" required />
+        <button type="submit" class="btn-primary">Get started</button>
+      </form>
+
+      <div id="aiWarning" class="ai-warning hidden">
+        ⚠️ The AI backend isn't responding. If you're self-hosting this, make sure <code>GEMINI_API_KEY</code> is set, then refresh.
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/js/script.js"></script>
+  <script>
+    // Page-specific bootstrap for the landing page
+    document.addEventListener('DOMContentLoaded', async () => {
+      await loadExistingUsers();
+      await checkAiStatusOnLanding();
+
+      document.getElementById('newUserForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const name = document.getElementById('nameInput').value.trim();
+        if (!name) return;
+        const res = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name }),
+        });
+        if (res.ok) {
+          window.location.href = '/chat';
+        }
+      });
+    });
+
+    async function loadExistingUsers() {
+      const res = await fetch('/api/users');
+      const users = await res.json();
+      if (users.length === 0) return;
+
+      const wrap = document.getElementById('existingUsers');
+      const list = document.getElementById('userList');
+      wrap.classList.remove('hidden');
+
+      users.forEach((u) => {
+        const btn = document.createElement('button');
+        btn.className = 'user-pill';
+        btn.innerHTML = `<span class="user-avatar">${u.name[0].toUpperCase()}</span> ${u.name}`;
+        btn.addEventListener('click', async () => {
+          const res = await fetch('/api/users/select', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: u.id }),
+          });
+          if (res.ok) window.location.href = '/chat';
+        });
+        list.appendChild(btn);
+      });
+    }
+
+    async function checkAiStatusOnLanding() {
+      try {
+        const res = await fetch('/api/status');
+        const status = await res.json();
+        if (!status.running || !status.model_available) {
+          document.getElementById('aiWarning').classList.remove('hidden');
+        }
+      } catch (e) {
+        document.getElementById('aiWarning').classList.remove('hidden');
+      }
+    }
+  </script>
+</body>
+</html>

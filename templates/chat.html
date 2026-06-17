@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Chat — AI Study Assistant{% endblock %}
+
+{% block content %}
+<div class="page chat-page">
+  <header class="page-header">
+    <div>
+      <h1>Chat with StudyAI</h1>
+      <p class="page-sub">Ask anything about what you're learning. I remember your progress.</p>
+    </div>
+    <button class="btn-ghost" id="clearChatBtn">Clear conversation</button>
+  </header>
+
+  <div class="chat-window" id="chatWindow">
+    <div class="chat-empty" id="chatEmpty">
+      <span class="empty-icon">💬</span>
+      <p>Hi {{ user.name }}! Ask me a study question to get started.</p>
+    </div>
+  </div>
+
+  <form class="chat-input-bar" id="chatForm">
+    <input
+      type="text"
+      id="chatInput"
+      placeholder="Ask a study question..."
+      autocomplete="off"
+      required
+    />
+    <button type="submit" class="btn-primary" id="chatSendBtn">Send</button>
+  </form>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const chatWindow = document.getElementById('chatWindow');
+  const chatEmpty = document.getElementById('chatEmpty');
+  const chatForm = document.getElementById('chatForm');
+  const chatInput = document.getElementById('chatInput');
+  const sendBtn = document.getElementById('chatSendBtn');
+
+  // Load existing history on page load
+  async function loadHistory() {
+    const res = await fetch('/api/chat/history');
+    if (!res.ok) return;
+    const history = await res.json();
+    if (history.length > 0) chatEmpty.classList.add('hidden');
+    history.forEach((m) => appendMessage(m.role, m.content));
+    scrollChatToBottom();
+  }
+
+  function appendMessage(role, content) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble ${role === 'user' ? 'bubble-user' : 'bubble-assistant'}`;
+    bubble.innerHTML = `
+      <div class="bubble-avatar">${role === 'user' ? '🙂' : '✦'}</div>
+      <div class="bubble-content">${formatMessage(content)}</div>
+    `;
+    chatWindow.appendChild(bubble);
+  }
+
+  function formatMessage(text) {
+    // Basic safe formatting: escape HTML, then convert newlines to <br>
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML.replace(/\n/g, '<br>');
+  }
+
+  function scrollChatToBottom() {
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+  }
+
+  function showTypingIndicator() {
+    const el = document.createElement('div');
+    el.className = 'chat-bubble bubble-assistant typing-indicator';
+    el.id = 'typingIndicator';
+    el.innerHTML = `
+      <div class="bubble-avatar">✦</div>
+      <div class="bubble-content"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+    `;
+    chatWindow.appendChild(el);
+    scrollChatToBottom();
+  }
+
+  function removeTypingIndicator() {
+    const el = document.getElementById('typingIndicator');
+    if (el) el.remove();
+  }
+
+  chatForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const message = chatInput.value.trim();
+    if (!message) return;
+
+    chatEmpty.classList.add('hidden');
+    appendMessage('user', message);
+    scrollChatToBottom();
+    chatInput.value = '';
+    sendBtn.disabled = true;
+    showTypingIndicator();
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message }),
+      });
+      const data = await res.json();
+      removeTypingIndicator();
+      if (res.ok) {
+        appendMessage('assistant', data.reply);
+      } else {
+        appendMessage('assistant', '⚠️ ' + (data.error || 'Something went wrong.'));
+      }
+    } catch (err) {
+      removeTypingIndicator();
+      appendMessage('assistant', '⚠️ Could not reach the server.');
+    } finally {
+      sendBtn.disabled = false;
+      scrollChatToBottom();
+    }
+  });
+
+  document.getElementById('clearChatBtn').addEventListener('click', async () => {
+    if (!confirm('Clear this conversation? This cannot be undone.')) return;
+    await fetch('/api/chat/clear', { method: 'POST' });
+    chatWindow.innerHTML = '';
+    chatWindow.appendChild(chatEmpty);
+    chatEmpty.classList.remove('hidden');
+  });
+
+  loadHistory();
+</script>
+{% endblock %}

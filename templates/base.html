@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}AI Study Assistant{% endblock %}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/css/style.css" />
+</head>
+<body>
+
+  <!-- ── Sidebar navigation ── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="logo-mark">✦</span>
+      <span class="logo-text">StudyAI</span>
+    </div>
+
+    <nav class="sidebar-nav">
+      <a href="/chat"      class="nav-item {% if active == 'chat' %}active{% endif %}">
+        <span class="nav-icon">💬</span> Chat
+      </a>
+      <a href="/study"     class="nav-item {% if active == 'study' %}active{% endif %}">
+        <span class="nav-icon">📖</span> Study
+      </a>
+      <a href="/dashboard" class="nav-item {% if active == 'dashboard' %}active{% endif %}">
+        <span class="nav-icon">📊</span> Dashboard
+      </a>
+      <a href="/history"   class="nav-item {% if active == 'history' %}active{% endif %}">
+        <span class="nav-icon">🗂</span> History
+      </a>
+    </nav>
+
+    <div class="sidebar-footer">
+      {% if user %}
+        <div class="user-chip">
+          <span class="user-avatar">{{ user.name[0].upper() }}</span>
+          <span class="user-name">{{ user.name }}</span>
+        </div>
+        <button class="btn-ghost" id="logoutBtn">Sign out</button>
+      {% endif %}
+      <div id="aiStatus" class="status-dot status-unknown" title="Checking AI status..."></div>
+    </div>
+  </aside>
+
+  <!-- ── Mobile top bar ── -->
+  <header class="mobile-header">
+    <button class="hamburger" id="menuToggle">☰</button>
+    <span class="logo-text">StudyAI</span>
+  </header>
+
+  <!-- ── Main content ── -->
+  <main class="main-content">
+    {% block content %}{% endblock %}
+  </main>
+
+  <script src="/static/js/script.js"></script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

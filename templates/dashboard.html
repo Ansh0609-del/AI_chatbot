@@ -1,0 +1,131 @@
+{% extends "base.html" %}
+{% block title %}Dashboard — AI Study Assistant{% endblock %}
+
+{% block content %}
+<div class="page dashboard-page">
+  <header class="page-header">
+    <div>
+      <h1>Your dashboard</h1>
+      <p class="page-sub">Track your progress at a glance, {{ user.name }}.</p>
+    </div>
+  </header>
+
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+      <span class="stat-label">Topics studied</span>
+      <span class="stat-value" id="statTopics">—</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Quizzes taken</span>
+      <span class="stat-value" id="statAttempts">—</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Average score</span>
+      <span class="stat-value" id="statAvg">—</span>
+    </div>
+    <div class="stat-card">
+      <span class="stat-label">Best score</span>
+      <span class="stat-value" id="statBest">—</span>
+    </div>
+  </div>
+
+  <div class="dashboard-columns">
+    <section class="card">
+      <h2 class="card-title">📈 Improvement over time</h2>
+      <div id="trendChart" class="trend-chart">
+        <p class="empty-note">No quiz data yet. Take a quiz in the Study tab to see your trend.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="card-title">⚠️ Weak areas</h2>
+      <div id="weakTopicsList" class="weak-list">
+        <p class="empty-note">No weak areas flagged yet — keep it up!</p>
+      </div>
+    </section>
+  </div>
+
+  <section class="card">
+    <h2 class="card-title">🕓 Recent quizzes</h2>
+    <div id="recentQuizzes" class="recent-quizzes">
+      <p class="empty-note">No quizzes taken yet.</p>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  async function loadDashboard() {
+    const res = await fetch('/api/dashboard');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    document.getElementById('statTopics').textContent = data.topics_studied;
+    document.getElementById('statAttempts').textContent = data.quiz_attempts;
+    document.getElementById('statAvg').textContent = data.avg_score + '%';
+    document.getElementById('statBest').textContent = data.best_score + '%';
+
+    renderWeakTopics(data.weak_topics);
+    renderRecentQuizzes(data.recent_quizzes);
+    renderTrendChart(data.recent_quizzes);
+  }
+
+  function renderWeakTopics(weak) {
+    const el = document.getElementById('weakTopicsList');
+    if (!weak || weak.length === 0) return;
+    el.innerHTML = weak
+      .map(
+        (w) => `
+        <div class="weak-item">
+          <span class="weak-topic">${w.topic}</span>
+          <span class="weak-badge">flagged ${w.times_flagged}×</span>
+        </div>
+      `
+      )
+      .join('');
+  }
+
+  function renderRecentQuizzes(quizzes) {
+    const el = document.getElementById('recentQuizzes');
+    if (!quizzes || quizzes.length === 0) return;
+    el.innerHTML = quizzes
+      .map(
+        (q) => `
+        <div class="recent-quiz-item">
+          <span class="rq-topic">${q.topic}</span>
+          <span class="rq-score ${q.pct >= 70 ? 'good' : q.pct >= 40 ? 'mid' : 'low'}">${q.score}/${q.total} (${Math.round(q.pct)}%)</span>
+          <span class="rq-date">${formatDate(q.taken_at)}</span>
+        </div>
+      `
+      )
+      .join('');
+  }
+
+  function renderTrendChart(quizzes) {
+    if (!quizzes || quizzes.length === 0) return;
+    const el = document.getElementById('trendChart');
+    const ordered = [...quizzes].reverse(); // oldest first for chart
+    const max = 100;
+    const bars = ordered
+      .map((q) => {
+        const height = Math.max(4, (q.pct / max) * 100);
+        return `
+          <div class="trend-bar-wrap" title="${q.topic}: ${Math.round(q.pct)}%">
+            <div class="trend-bar" style="height:${height}%"></div>
+            <span class="trend-label">${Math.round(q.pct)}%</span>
+          </div>
+        `;
+      })
+      .join('');
+    el.innerHTML = `<div class="trend-bars">${bars}</div>`;
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso + 'Z');
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+
+  loadDashboard();
+</script>
+{% endblock %}

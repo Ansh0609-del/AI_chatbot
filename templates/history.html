@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}History — AI Study Assistant{% endblock %}
+
+{% block content %}
+<div class="page history-page">
+  <header class="page-header">
+    <div>
+      <h1>Study history</h1>
+      <p class="page-sub">Everything you've studied and every quiz you've taken.</p>
+    </div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="topics">Topics</button>
+    <button class="tab-btn" data-tab="quizzes">Quizzes</button>
+  </div>
+
+  <section class="card tab-panel" id="topicsPanel">
+    <div id="topicsList">
+      <p class="empty-note">Loading...</p>
+    </div>
+  </section>
+
+  <section class="card tab-panel hidden" id="quizzesPanel">
+    <div id="quizzesList">
+      <p class="empty-note">Loading...</p>
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.querySelectorAll('.tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      const tab = btn.dataset.tab;
+      document.getElementById('topicsPanel').classList.toggle('hidden', tab !== 'topics');
+      document.getElementById('quizzesPanel').classList.toggle('hidden', tab !== 'quizzes');
+    });
+  });
+
+  async function loadTopics() {
+    const res = await fetch('/api/history/topics');
+    const topics = await res.json();
+    const el = document.getElementById('topicsList');
+
+    if (!topics.length) {
+      el.innerHTML = '<p class="empty-note">No topics studied yet. Head to the Study tab to begin.</p>';
+      return;
+    }
+
+    el.innerHTML = topics
+      .map(
+        (t) => `
+        <details class="history-item">
+          <summary>
+            <span class="hi-topic">${t.topic}</span>
+            <span class="hi-date">${formatDate(t.studied_at)}</span>
+          </summary>
+          <div class="hi-body">
+            <h4>Explanation</h4>
+            <p>${escapeHtml(t.explanation)}</p>
+            <h4>Notes</h4>
+            <pre>${escapeHtml(t.notes)}</pre>
+          </div>
+        </details>
+      `
+      )
+      .join('');
+  }
+
+  async function loadQuizzes() {
+    const res = await fetch('/api/history/quizzes');
+    const quizzes = await res.json();
+    const el = document.getElementById('quizzesList');
+
+    if (!quizzes.length) {
+      el.innerHTML = '<p class="empty-note">No quizzes taken yet.</p>';
+      return;
+    }
+
+    el.innerHTML = quizzes
+      .map((q) => {
+        const pct = Math.round((q.score / q.total) * 100);
+        const rows = q.questions
+          .map((question, i) => {
+            const isCorrect = q.answers[i] === q.correct_answers[i];
+            return `
+              <div class="breakdown-item ${isCorrect ? 'correct' : 'incorrect'}">
+                <p class="breakdown-q">${i + 1}. ${escapeHtml(question)}</p>
+                <p class="breakdown-a">Your answer: ${q.answers[i]} ${isCorrect ? '✓' : '— Correct: ' + q.correct_answers[i] + ' ✗'}</p>
+              </div>
+            `;
+          })
+          .join('');
+        return `
+          <details class="history-item">
+            <summary>
+              <span class="hi-topic">${q.topic}</span>
+              <span class="rq-score ${pct >= 70 ? 'good' : pct >= 40 ? 'mid' : 'low'}">${q.score}/${q.total} (${pct}%)</span>
+              <span class="hi-date">${formatDate(q.taken_at)}</span>
+            </summary>
+            <div class="hi-body">
+              ${rows}
+              <p class="breakdown-exp"><strong>Feedback:</strong> ${escapeHtml(q.feedback || '')}</p>
+            </div>
+          </details>
+        `;
+      })
+      .join('');
+  }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text || '';
+    return div.innerHTML.replace(/\n/g, '<br>');
+  }
+
+  function formatDate(iso) {
+    const d = new Date(iso + 'Z');
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+
+  loadTopics();
+  loadQuizzes();
+</script>
+{% endblock %}

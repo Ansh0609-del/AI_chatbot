@@ -1,0 +1,59 @@
+# render.yaml — Render Blueprint for AI Study Assistant
+#
+# This file lets you deploy the entire service with "New + > Blueprint" in
+# the Render dashboard instead of manually configuring build/start commands.
+# Render reads this automatically when it finds it in the repo root.
+#
+# Docs: https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: ai-study-assistant
+    runtime: python
+    plan: free
+    region: oregon
+    branch: main
+
+    # Installs dependencies from requirements.txt
+    buildCommand: pip install -r requirements.txt
+
+    # Gunicorn is the production WSGI server — Flask's built-in dev server
+    # is never used in this deployment. Worker/thread counts are kept modest
+    # because the app uses a single SQLite file as its datastore.
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --threads 4 --timeout 120
+
+    # Render calls this endpoint to confirm the service is alive and ready
+    # to receive traffic before routing requests to it.
+    healthCheckPath: /health
+
+    envVars:
+      # Secret values: set these in the Render dashboard (Environment tab)
+      # rather than committing real values here. `sync: false` tells Render
+      # "this variable is required but its value is provided manually."
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: SECRET_KEY
+        generateValue: true   # Render auto-generates a secure random value
+
+      # Non-secret defaults — safe to keep in source control.
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: FLASK_DEBUG
+        value: "false"
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: PYTHON_VERSION
+        value: "3.12.3"
+
+    # OPTIONAL: uncomment to attach a persistent disk so the SQLite database
+    # survives redeploys (Render's default filesystem is ephemeral). Requires
+    # a paid plan — disks aren't available on the free tier.
+    # disk:
+    #   name: study-assistant-data
+    #   mountPath: /var/data
+    #   sizeGB: 1
+    # and then also uncomment a DATABASE_PATH env var below pointing into it:
+    # - key: DATABASE_PATH
+    #   value: /var/data/study_assistant.db

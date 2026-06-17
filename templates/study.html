@@ -1,0 +1,225 @@
+{% extends "base.html" %}
+{% block title %}Study — AI Study Assistant{% endblock %}
+
+{% block content %}
+<div class="page study-page">
+  <header class="page-header">
+    <div>
+      <h1>Study a topic</h1>
+      <p class="page-sub">Get an explanation, notes, and a 5-question quiz — generated just for you.</p>
+    </div>
+  </header>
+
+  <!-- Step 1: topic input -->
+  <section class="card" id="topicCard">
+    <form id="topicForm" class="topic-form">
+      <input type="text" id="topicInput" placeholder="e.g. Newton's Laws of Motion, Photosynthesis, Big-O Notation" required />
+      <button type="submit" class="btn-primary" id="topicSubmitBtn">Start studying</button>
+    </form>
+  </section>
+
+  <!-- Loading state -->
+  <div class="loading-state hidden" id="loadingState">
+    <div class="spinner"></div>
+    <p id="loadingText">Generating explanation...</p>
+  </div>
+
+  <!-- Step 2: explanation + notes -->
+  <section class="card hidden" id="explanationCard">
+    <h2 class="card-title">📘 Explanation</h2>
+    <p class="card-text" id="explanationText"></p>
+
+    <h2 class="card-title">📝 Study Notes</h2>
+    <pre class="card-notes" id="notesText"></pre>
+
+    <button class="btn-primary" id="startQuizBtn">Take the quiz →</button>
+  </section>
+
+  <!-- Step 3: quiz -->
+  <section class="card hidden" id="quizCard">
+    <h2 class="card-title">🧠 Quiz: <span id="quizTopicLabel"></span></h2>
+    <form id="quizForm"></form>
+    <button class="btn-primary" id="submitQuizBtn">Submit answers</button>
+  </section>
+
+  <!-- Step 4: results -->
+  <section class="card hidden" id="resultsCard">
+    <h2 class="card-title">✅ Results</h2>
+    <div class="results-score" id="resultsScore"></div>
+    <div class="results-breakdown" id="resultsBreakdown"></div>
+    <div class="results-feedback" id="resultsFeedback"></div>
+    <div class="results-recommendation" id="resultsRecommendation"></div>
+    <button class="btn-primary" id="studyAnotherBtn">Study another topic</button>
+  </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const topicCard = document.getElementById('topicCard');
+  const topicForm = document.getElementById('topicForm');
+  const topicInput = document.getElementById('topicInput');
+  const loadingState = document.getElementById('loadingState');
+  const loadingText = document.getElementById('loadingText');
+  const explanationCard = document.getElementById('explanationCard');
+  const quizCard = document.getElementById('quizCard');
+  const resultsCard = document.getElementById('resultsCard');
+
+  let currentTopic = '';
+  let currentTopicId = null;
+  let currentNotes = '';
+  let currentQuestions = [];
+
+  function showOnly(...idsToShow) {
+    [topicCard, loadingState, explanationCard, quizCard, resultsCard].forEach((el) => el.classList.add('hidden'));
+    idsToShow.forEach((el) => el.classList.remove('hidden'));
+  }
+
+  topicForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    currentTopic = topicInput.value.trim();
+    if (!currentTopic) return;
+
+    showOnly(loadingState);
+    loadingText.textContent = `Generating explanation for "${currentTopic}"...`;
+
+    try {
+      const res = await fetch('/api/study/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: currentTopic }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate content');
+
+      currentTopicId = data.topic_id;
+      currentNotes = data.notes;
+
+      document.getElementById('explanationText').textContent = data.explanation;
+      document.getElementById('notesText').textContent = data.notes;
+      showOnly(explanationCard);
+    } catch (err) {
+      alert('Error: ' + err.message);
+      showOnly(topicCard);
+    }
+  });
+
+  document.getElementById('startQuizBtn').addEventListener('click', async () => {
+    showOnly(loadingState);
+    loadingText.textContent = 'Generating 5 quiz questions...';
+
+    try {
+      const res = await fetch('/api/study/quiz/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ topic: currentTopic, notes: currentNotes }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to generate quiz');
+
+      currentQuestions = data.questions;
+      renderQuiz(currentQuestions);
+      showOnly(quizCard);
+    } catch (err) {
+      alert('Error: ' + err.message);
+      showOnly(explanationCard);
+    }
+  });
+
+  function renderQuiz(questions) {
+    document.getElementById('quizTopicLabel').textContent = currentTopic;
+    const form = document.getElementById('quizForm');
+    form.innerHTML = '';
+
+    questions.forEach((q, i) => {
+      const block = document.createElement('div');
+      block.className = 'quiz-question';
+      const optionsHtml = q.options
+        .map((opt) => {
+          const letter = opt.trim()[0];
+          return `
+            <label class="quiz-option">
+              <input type="radio" name="q${i}" value="${letter}" required />
+              <span>${opt}</span>
+            </label>
+          `;
+        })
+        .join('');
+      block.innerHTML = `
+        <p class="quiz-question-text">${i + 1}. ${q.question}</p>
+        <div class="quiz-options">${optionsHtml}</div>
+      `;
+      form.appendChild(block);
+    });
+  }
+
+  document.getElementById('submitQuizBtn').addEventListener('click', async () => {
+    const form = document.getElementById('quizForm');
+    const answers = [];
+    for (let i = 0; i < currentQuestions.length; i++) {
+      const selected = form.querySelector(`input[name="q${i}"]:checked`);
+      if (!selected) {
+        alert('Please answer all questions before submitting.');
+        return;
+      }
+      answers.push(selected.value);
+    }
+
+    showOnly(loadingState);
+    loadingText.textContent = 'Grading your quiz...';
+
+    try {
+      const res = await fetch('/api/study/quiz/submit', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          topic_id: currentTopicId,
+          topic: currentTopic,
+          questions: currentQuestions,
+          user_answers: answers,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to grade quiz');
+
+      renderResults(data);
+      showOnly(resultsCard);
+    } catch (err) {
+      alert('Error: ' + err.message);
+      showOnly(quizCard);
+    }
+  });
+
+  function renderResults(data) {
+    document.getElementById('resultsScore').innerHTML = `
+      <div class="score-circle">${data.score}/${data.total}</div>
+      <p class="score-pct">${data.percentage}%</p>
+    `;
+
+    const breakdown = document.getElementById('resultsBreakdown');
+    breakdown.innerHTML = data.per_question_feedback
+      .map(
+        (pq, i) => `
+        <div class="breakdown-item ${pq.is_correct ? 'correct' : 'incorrect'}">
+          <p class="breakdown-q">${i + 1}. ${pq.question}</p>
+          <p class="breakdown-a">Your answer: ${pq.user_answer} ${pq.is_correct ? '✓' : '— Correct: ' + pq.correct_answer + ' ✗'}</p>
+          <p class="breakdown-exp">${pq.explanation}</p>
+        </div>
+      `
+      )
+      .join('');
+
+    document.getElementById('resultsFeedback').innerHTML = `<strong>Feedback:</strong> ${data.overall_feedback}`;
+    document.getElementById('resultsRecommendation').innerHTML = `<strong>What's next:</strong> ${data.recommendation}`;
+  }
+
+  document.getElementById('studyAnotherBtn').addEventListener('click', () => {
+    topicInput.value = '';
+    currentTopic = '';
+    currentTopicId = null;
+    currentNotes = '';
+    currentQuestions = [];
+    showOnly(topicCard);
+  });
+</script>
+{% endblock %}
