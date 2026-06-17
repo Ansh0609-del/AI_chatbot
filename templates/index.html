@@ -41,7 +41,7 @@
     </div>
   </div>
 
-  <script src="/static/js/script.js"></script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
   <script>
     // Page-specific bootstrap for the landing page
     document.addEventListener('DOMContentLoaded', async () => {
