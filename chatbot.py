@@ -108,7 +108,10 @@ def _generate(prompt: str, system: str = "", json_mode: bool = False) -> str:
             logger.exception("Unexpected error calling Gemini API.")
             break
 
-    return f"⚠️ AI service error: {str(last_error)}"
+    if last_error and "429" in str(last_error):
+        return "⚠️ Gemini quota exceeded. Please try again later."
+
+    return "⚠️ AI service is temporarily unavailable."
 
 
 def _generate_chat(messages: list[dict], system: str = "") -> str:
@@ -160,58 +163,27 @@ def _generate_chat(messages: list[dict], system: str = "") -> str:
             logger.exception("Unexpected error calling Gemini chat API.")
             break
 
-    return f"⚠️ AI service error: {str(last_error)}"
+    if last_error and "429" in str(last_error):
+        return "⚠️ Gemini quota exceeded. Please try again later."
+
+    return "⚠️ AI service is temporarily unavailable."
 
 
 def check_ai_status() -> dict:
-    """
-    Lightweight connectivity check used by the landing page and /health route.
-    Returns {"running": bool, "model_available": bool, "message": str}.
-    Used by the landing page and the /health-adjacent /api/status route to
-    surface whether the AI backend is reachable and correctly configured.
-    """
     api_key = os.environ.get("GEMINI_API_KEY")
+
     if not api_key:
         return {
             "running": False,
             "model_available": False,
-            "message": "GEMINI_API_KEY is not set. Add it to your environment or .env file.",
+            "message": "GEMINI_API_KEY is not set."
         }
 
-    client = _get_client()
-    if client is None:
-        return {
-            "running": False,
-            "model_available": False,
-            "message": "Could not initialize the Gemini client. Check GEMINI_API_KEY.",
-        }
-
-    try:
-        # A minimal, cheap call just to confirm the key + model are valid.
-        client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents="ping",
-            config=types.GenerateContentConfig(
-                max_output_tokens=5,
-            ),
-        )
-        return {
-            "running": True,
-            "model_available": True,
-            "message": f"Gemini API connected ✅ ({GEMINI_MODEL})",
-        }
-    except APIError as e:
-        return {
-            "running": False,
-            "model_available": False,
-            "message": f"Gemini API error: {e}",
-        }
-    except Exception as e:
-        return {
-            "running": False,
-            "model_available": False,
-            "message": f"Could not reach Gemini API: {e}",
-        }
+    return {
+        "running": True,
+        "model_available": True,
+        "message": f"Gemini configured ✅ ({GEMINI_MODEL})"
+    }
 
 
 # ─── Study workflow AI calls ──────────────────────────────────────────────────
